@@ -1,5 +1,4 @@
 #include <Windows.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string>
 #include <time.h>
@@ -7,78 +6,37 @@
 #include <math.h>
 #include <shellscalingapi.h>
 
-#if 0
-#define DEBUGG_MODE
+#include "win32_layer.h"
+#include "debugging.h"
+#include "game_specific_declarations.h"
+
+#ifdef DEBUGG_MODE
+//#undef DEBUGG_MODE
 #endif
 
-#define debugg_msg(debuggMessage) MessageBoxExW(NULL, debuggMessage, L"Ошибочка вышла", 0x00000001L, 0);
-#define UNSIGNED_CHAR_MAX_VALUE 255
-#define UNSIGNED_CHAR_MIN_VALUE 0
+private global_applicatiton_state game_state;
+private uchar8 initial_run = 0;
+private win32_grid_cell cell = { 0 };
+private win32_grid grid = {};
 
-typedef unsigned char uchar8;
-typedef int int32;
-typedef long long int int64;
-typedef unsigned int uint32;
-typedef unsigned long long int uint64;
-
-static const int BytesPerPixel = 4;
-static  int xDisplacement = 350;
-static  int yDisplacement = 350;
-static unsigned int displacementMang = 100;
-static uchar8 initial_run = 0;
-static uint32 displaying_grid_on_top;
-
-struct global_applicatiton_state
+int wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int32 nCmdShow)
 {
-	boolean gameIsRunning;
-	void* Bitmapmemory;
-	uint32* last_pixel;
-	int clientWidth;
-	int clientHeight;
-	uint32 default_color;
-} game_state;
-
-static HINSTANCE hInstance_w;
-HWND child;
-
-void ClearScreenBuffer();
-void RestoreSavedPattern();
-void SetDPI_Awareness(LPRECT rt);
-void RunOnlyOnce();
-void FillRectangleOnGrid(HWND, uint32);
-void UpdateClientAreaRECT(HWND);
-void InstantiateBitmapMemory(HWND);
-void ResizeApplication(HWND);
-void FillWindowWithFlatColor(uint32);
-void StretchPixels(HWND);
-void MakeAGrid(uint32, uchar8, uchar8, uchar8);
-void MakeAPlayerCube(uint32, uint32, uint32, uint32);
-void DrawRectangle(uint32);
-void FillBitmapMemoryWithFlatColor(uint32);
-uchar8 SaveBitPatternToFile(HWND, void*);
-LRESULT RootWindowProcedure(HWND, UINT, WPARAM, LPARAM);
-LRESULT LittleWindowProc(HWND, UINT, WPARAM, LPARAM);
-HWND CreateChildWindow(HINSTANCE hInstance, HWND parent_window);
-
-int wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
-{
-	hInstance_w = hInstance;
 	RECT client_area_initial_dimensions;
-
-	SetDPI_Awareness(&client_area_initial_dimensions);
+	AdjustClientArea(&client_area_initial_dimensions);
 
 	game_state.gameIsRunning = true;
 	game_state.Bitmapmemory = NULL;
 	game_state.clientWidth = client_area_initial_dimensions.right - client_area_initial_dimensions.left;
 	game_state.clientHeight = client_area_initial_dimensions.bottom - client_area_initial_dimensions.top;
+
 	game_state.last_pixel = NULL;
-	game_state.default_color = 0b111000001110000011100000;
+	game_state.grid_step = 20;
 
 #ifdef DEBUGG_MODE
 	if (SetProcessDPIAware() == 0)
 		debugg_msg(L"Application is not scaled properly, check DPI awareness")
 #endif  
-		const wchar_t* class_name = L"AttemptToSpinAppWin32App";
+		const wchar_t* class_name = L"Explore_and_enjoy";
 
 	WNDCLASSW wc = { 0 };
 
@@ -86,7 +44,7 @@ int wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int n
 	wc.lpszClassName = class_name;
 	wc.hInstance = hInstance;
 	wc.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
-	wc.lpszMenuName = L"SquarePallete";
+	wc.lpszMenuName = L"PathFinding_Algo";
 	wc.hbrBackground = (HBRUSH)GetStockObject(COLOR_WINDOW + 1);
 	wc.hIcon = (HICON)LoadImageW(NULL, L"small.ico", IMAGE_ICON, 0, 0, LR_LOADFROMFILE | LR_SHARED | LR_LOADTRANSPARENT);
 
@@ -94,37 +52,20 @@ int wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int n
 	{
 		HWND root_window_handle = CreateWindowW(
 			class_name,
-			L"Squares Pallete",
-			WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
+			L"Path_Finding_Algo",
+			WS_CAPTION | WS_SYSMENU | WS_VISIBLE | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX,
 			50,
-			50,
+			100,
 			game_state.clientWidth,
 			game_state.clientHeight,
 			0,
 			0,
 			hInstance,
 			0);
-		child = CreateWindow(L"STATIC", L"Child Window", WS_CHILD | WS_VISIBLE | WS_BORDER, 50, 50, 200, 100, root_window_handle, NULL, hInstance_w, NULL);
-#ifdef DEBUGG_MODE
-		FILE* fp;
-
-		AllocConsole();
-		freopen_s(&fp, "CONIN$", "r", stdin);
-		freopen_s(&fp, "CONOUT$", "w", stdout);
-		freopen_s(&fp, "CONOUT$", "w", stderr);
-
-		HWND console_handle = GetConsoleWindow();
-		MoveWindow(console_handle, 1500, 100, 800, 1200, true);
-#if 0
-		unsigned int dpix;
-		unsigned int dpiy;
-		HMONITOR monitor = GetPrimaryMonitorHandle();
-		HRESULT isOK = GetDpiForMonitor(monitor, MDT_RAW_DPI, &dpiX, &dpiY);
-		printf("is DPI function returned correctly? 0 is only correct answer - %i\n", isOK);
-		printf("DPI on my laptop is - %i\n", dpiX);
+#ifndef DEBUGG_MODE
+		CreateConsoleForDebugging();
 #endif
 
-#endif
 		while (game_state.gameIsRunning)
 		{
 			MSG msg = {};
@@ -137,10 +78,10 @@ int wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int n
 
 			RunOnlyOnce();
 
-			if (displaying_grid_on_top == 1)  MakeAGrid(100, 200, 200, 200);
 
+			MakeAGrid(game_state.grid_step, 100, 100, 100);
 			StretchPixels(root_window_handle);
-			
+
 			Sleep(1);
 			ReleaseDC(root_window_handle, hdc);
 		}
@@ -176,10 +117,6 @@ LRESULT RootWindowProcedure(HWND window_handle, UINT msg, WPARAM wParam, LPARAM 
 	break;
 	case WM_SIZE:
 	{
-#ifdef DEBUGG_MODE
-		static int count = 1;
-		printf("%d times WM_SIZE was called\n", count++);
-#endif
 		ResizeApplication(window_handle);
 	}
 	break;
@@ -193,16 +130,45 @@ LRESULT RootWindowProcedure(HWND window_handle, UINT msg, WPARAM wParam, LPARAM 
 	case WM_MOUSEMOVE:
 	{
 		SetCursor(LoadCursor(NULL, IDC_CROSS));
+		
+
+		POINT cursor_pos;
+		if (GetCursorPos(&cursor_pos))
+		{
+			ScreenToClient(window_handle, &cursor_pos);
+		}
+
+		if (wParam & MK_LBUTTON) {
+			FillRectangleOnGrid(window_handle, WIN32_RANDOM_COLOR, game_state.grid_step);
+		}
+		if ((GetKeyState(VK_RBUTTON) & 0x80) != 0) {
+			FillRectangleOnGrid(window_handle, WIN32_BLACK, game_state.grid_step);
+		}
+		
 	}
 	break;
 	case WM_LBUTTONDOWN:
 	{
-		FillRectangleOnGrid(window_handle, 0);
+		POINT cursor_pos;
+		if (GetCursorPos(&cursor_pos))
+		{
+			ScreenToClient(window_handle, &cursor_pos);
+		}
+
+		if (GetKeyState(VK_LCONTROL) >> 15 & 0x1) {
+			PrintCellColor(&cursor_pos);
+		}
+		else {
+		FillRectangleOnGrid(window_handle, WIN32_RANDOM_COLOR, game_state.grid_step);
+		}
+
+		//PrintCellColor(&cursor_pos);
+		//PathFinding(&cursor_pos);
 	}
 	break;
 	case WM_RBUTTONDOWN:
 	{
-		FillRectangleOnGrid(window_handle, game_state.default_color);
+		FillRectangleOnGrid(window_handle, WIN32_DEFAULT, game_state.grid_step);
 	}
 	break;
 	case WM_KEYDOWN:
@@ -214,7 +180,7 @@ LRESULT RootWindowProcedure(HWND window_handle, UINT msg, WPARAM wParam, LPARAM 
 		} break;
 		case 0x47: // Key "G"
 		{
-			displaying_grid_on_top == 0 ? displaying_grid_on_top = 1 : displaying_grid_on_top = 0;
+			MakeAGrid(20, 100, 100, 100);
 		} break;
 		case 0x51: // Key "Q"
 		{
@@ -242,7 +208,8 @@ void RunOnlyOnce()
 		return;
 
 	else {
-		FillBitmapMemoryWithFlatColor(game_state.default_color);
+		FillBitmapMemoryWithFlatColor(WIN32_DEFAULT);
+		MakeAGrid(game_state.grid_step, 100, 100, 100);
 		initial_run = 1;
 	}
 }
@@ -250,7 +217,7 @@ void RunOnlyOnce()
 void InstantiateBitmapMemory(HWND window_handle)
 {
 	if (game_state.Bitmapmemory == NULL) {
-		game_state.Bitmapmemory = VirtualAlloc(0, abs(game_state.clientWidth * game_state.clientHeight * BytesPerPixel), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+		game_state.Bitmapmemory = VirtualAlloc(0, game_state.clientWidth * game_state.clientHeight * BYTES_PER_PIXEL, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 		game_state.last_pixel = (uint32*)game_state.Bitmapmemory + (game_state.clientHeight * game_state.clientWidth) - 1;
 	}
 }
@@ -272,8 +239,8 @@ void ResizeApplication(HWND window_handle)
 		VirtualFree(game_state.Bitmapmemory, 0, MEM_RELEASE);
 		game_state.last_pixel = NULL;
 	}
-	game_state.Bitmapmemory = VirtualAlloc(0, abs(game_state.clientWidth * game_state.clientHeight * BytesPerPixel), MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-	game_state.last_pixel = (uint32*)game_state.Bitmapmemory + abs(game_state.clientHeight * game_state.clientWidth) - 1;
+	game_state.Bitmapmemory = VirtualAlloc(0, game_state.clientWidth * game_state.clientHeight * BYTES_PER_PIXEL, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	game_state.last_pixel = ((uint32*)game_state.Bitmapmemory + game_state.clientHeight * game_state.clientWidth) - 1;
 }
 
 void FillBitmapMemoryWithFlatColor(uint32 color)
@@ -329,8 +296,12 @@ void MakeAGrid(uint32 step, uchar8 red, uchar8 green, uchar8 blue)
 
 				*Pixel++ = UNSIGNED_CHAR_MAX_VALUE;
 			}
+			else if (initial_run != 1 &&  x % 10 == 0 && y % 10 == 0) {
+				grid.color[y / game_state.grid_step][x / game_state.grid_step] = *Pixel;
+				Pixel += BYTES_PER_PIXEL;
+			}
 			else {
-				Pixel += BytesPerPixel;
+				Pixel += BYTES_PER_PIXEL;
 			}
 		}
 	}
@@ -353,47 +324,37 @@ void MakeAPlayerCube(uint32 width, uint32 height, uint32 coordX, uint32 coordY) 
 			}
 
 			else {
-				Pixel += BytesPerPixel;
+				Pixel += BYTES_PER_PIXEL;
 			}
 		}
 	}
 }
 
-void DrawRectangle(uint32 step) {
-
-	unsigned int* currentRow = (unsigned int*)game_state.Bitmapmemory;
-
-	for (int i = 0; i < step; ++i) {
-		unsigned int* Pixel = currentRow;
-		for (int j = 0; j < step; ++j) {
-			*Pixel++ = 40000;
-		}
-		currentRow = currentRow + game_state.clientWidth;
-	}
-}
-
-void FillRectangleOnGrid(HWND window_handle, uint32 rect_color)
+void FillRectangleOnGrid(HWND window_handle, uint32 rect_color, uint32 step)
 {
 	POINT cursor_position;
 	if (GetCursorPos(&cursor_position))
 	{
-		uint32 tile_width = 100;
+		uint32 tile_width = step;
 		uint32 tile_index_x, tile_index_y = 0;
-		int tile_width_x = 100;
+		int tile_width_x = step;
 
 		ScreenToClient(window_handle, &cursor_position);
 
 		tile_index_x = cursor_position.x / tile_width;
 		tile_index_y = cursor_position.y / tile_width;
 
-		if (game_state.clientWidth - cursor_position.x <= 96) {
+		cell.x = tile_index_x;
+		cell.y = tile_index_y;
+
+		if (game_state.clientWidth - cursor_position.x < step) {
 			tile_width_x = game_state.clientWidth - tile_index_x * tile_width;
 		}
 
 		uchar8 r, g, b = 0;
-		uint32 color = 0;
 
-		if (rect_color != game_state.default_color) {
+		if (rect_color == WIN32_RANDOM_COLOR) {
+			rect_color = 0;
 			struct timespec ts;
 
 			timespec_get(&ts, TIME_UTC);
@@ -408,9 +369,11 @@ void FillRectangleOnGrid(HWND window_handle, uint32 rect_color)
 			srand(ts.tv_nsec);
 			b = rand() & 255;
 
-			color |= b << 16 | g << 8 | r;
+			rect_color |= 0xff << 24 | b << 16 | g << 8 | r;
 		}
-		else color = game_state.default_color;
+		// !!!! Updating array with grid colors !!!!
+		grid.color[tile_index_x][tile_index_y] = rect_color;
+
 
 		uint32* Pixel = (uint32*)game_state.Bitmapmemory;
 		Pixel += (tile_index_y * tile_width) * game_state.clientWidth + (tile_index_x * tile_width);
@@ -420,39 +383,27 @@ void FillRectangleOnGrid(HWND window_handle, uint32 rect_color)
 				if (Pixel > game_state.last_pixel) {
 					break;
 				}
-
-				*Pixel++ = color;
+				*Pixel++ = rect_color;
 			}
 			Pixel += game_state.clientWidth - tile_width_x;
 		}
 	}
 }
 
-void SetDPI_Awareness(LPRECT lprect)
+void AdjustClientArea(LPRECT lprect)
 {
 	lprect->left = 0;
 	lprect->top = 0;
-	lprect->right = 1400;
+	lprect->right = 1200;
 	lprect->bottom = 800;
 
-	uint32 dpiY = 96, dpiX = 96;
-	HRESULT res = GetDpiForMonitor(MonitorFromWindow(0, MONITOR_DEFAULTTOPRIMARY), MDT_RAW_DPI, &dpiY, &dpiX);
-
-	if (dpiY > 96 || dpiX > 96)
-	{
-		SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE);
-		AdjustWindowRectExForDpi(lprect, WS_CAPTION | WS_SYSMENU | WS_VISIBLE, 0, 0, dpiY > dpiX ? dpiY : dpiX);
-	}
-	else
-	{
-		AdjustWindowRectEx(lprect, WS_CAPTION | WS_SYSMENU | WS_VISIBLE, 0, 0);
-	}
+	AdjustWindowRectEx(lprect, WS_CAPTION | WS_SYSMENU | WS_VISIBLE | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX, 0, 0);
 }
 
 uchar8 SaveBitPatternToFile(HWND, void*)
 {
 	HANDLE file_handle = NULL;
-	uint32 total_bytes_size = game_state.clientHeight * game_state.clientWidth * BytesPerPixel;
+	uint32 total_bytes_size = game_state.clientHeight * game_state.clientWidth * BYTES_PER_PIXEL;
 	DWORD bytes_written = 0;
 
 	file_handle = CreateFileW(L"save_file", FILE_GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -475,7 +426,7 @@ void RestoreSavedPattern()
 {
 	HANDLE file_handle = NULL;
 	DWORD amount_of_bytes_was_read = 0;
-	uint32 total_bytes_size = game_state.clientHeight * game_state.clientWidth * BytesPerPixel;
+	uint32 total_bytes_size = game_state.clientHeight * game_state.clientWidth * BYTES_PER_PIXEL;
 
 	void* bytes_to_read = malloc(total_bytes_size);
 
@@ -483,7 +434,7 @@ void RestoreSavedPattern()
 	file_handle = CreateFile(L"save_file", GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 
 	if (file_handle == INVALID_HANDLE_VALUE) {
-		debugg_msg(L"У тебя пока нет сейвов");
+		debugg_msg(L"You have 0 saves");
 		free(bytes_to_read);
 		return;
 	}
@@ -505,7 +456,137 @@ void ClearScreenBuffer()
 {
 	uint32* Pixel = (uint32*)game_state.Bitmapmemory;
 	for (uint32 i = 0; i < game_state.clientWidth * game_state.clientHeight; ++i) {
-		*Pixel++ = game_state.default_color;
+		*Pixel++ = WIN32_DEFAULT;
 	}
 	return;
+}
+
+void DrawTileMap(uint32 step)
+{
+	// Iterate over a tile map
+	// Draw every tile
+
+}
+
+HWND CreateConsoleForDebugging()
+{
+	FILE* fp;
+
+	AllocConsole();
+	freopen_s(&fp, "CONIN$", "r", stdin);
+	freopen_s(&fp, "CONOUT$", "w", stdout);
+	freopen_s(&fp, "CONOUT$", "w", stderr);
+
+	HWND console_handle = GetConsoleWindow();
+	MoveWindow(console_handle, 1500, 100, 800, 1200, true);
+#ifdef DEBUGG_MODE
+	unsigned int dpix;
+	unsigned int dpiy;
+	const POINT ptZero = { 0, 0 };
+	HMONITOR monitor = MonitorFromPoint(ptZero, MONITOR_DEFAULTTOPRIMARY);
+	HRESULT isOK = GetDpiForMonitor(monitor, MDT_RAW_DPI, &dpix, &dpiy);
+	printf("is DPI function returned correctly? 0 is only correct answer - %i\n", isOK);
+	printf("DPI on my laptop is - %i\n", dpix);
+#endif
+	return console_handle;
+}
+
+void PathFinding(POINT* cursor_pos)
+{
+	printf("Current cell is %d,%d\n", cell.x, cell.y);
+	// Check adjacent cells
+
+	if (cell.x >= 1 && cell.y >= 1 && cell.x < 59 && cell.y < 39) {
+		FillAdjasentRectangles();
+	}
+
+}
+
+void FillAdjasentRectangles()
+{
+	win32_grid_cell cell_to_paint = { 0 };
+	cell_to_paint.x = cell.x;
+	cell_to_paint.y = cell.y - 1;
+
+	if (CheckCell(&cell_to_paint)) {
+		PaintRectangleWithCellCoords(&cell_to_paint);
+	}
+
+	cell_to_paint.x = cell_to_paint.x + 1;
+	if (CheckCell(&cell_to_paint)) {
+		PaintRectangleWithCellCoords(&cell_to_paint);
+	}
+
+	cell_to_paint.y = cell_to_paint.y + 1;
+	if (CheckCell(&cell_to_paint)) {
+		PaintRectangleWithCellCoords(&cell_to_paint);
+	}
+
+	cell_to_paint.y = cell_to_paint.y + 1;
+	if (CheckCell(&cell_to_paint)) {
+		PaintRectangleWithCellCoords(&cell_to_paint);
+	}
+
+	cell_to_paint.x = cell_to_paint.x - 1;
+	if (CheckCell(&cell_to_paint)) {
+		PaintRectangleWithCellCoords(&cell_to_paint);
+	}
+
+	cell_to_paint.x = cell_to_paint.x - 1;
+	if (CheckCell(&cell_to_paint)) {
+		PaintRectangleWithCellCoords(&cell_to_paint);
+	}
+
+	cell_to_paint.y = cell_to_paint.y - 1;
+	if (CheckCell(&cell_to_paint)) {
+		PaintRectangleWithCellCoords(&cell_to_paint);
+	}
+
+	cell_to_paint.y = cell_to_paint.y - 1;
+	if (CheckCell(&cell_to_paint)) {
+		PaintRectangleWithCellCoords(&cell_to_paint);
+	}
+}
+
+void PaintRectangleWithCellCoords(win32_grid_cell* coords)
+{
+	uint32* Pixel = (uint32*)game_state.Bitmapmemory;
+	Pixel += (coords->y * game_state.grid_step) * game_state.clientWidth + (coords->x * game_state.grid_step);
+
+	for (int x = 0; x < game_state.grid_step; x++) {
+		for (int y = 0; y < game_state.grid_step; y++) {
+			if (Pixel > game_state.last_pixel) {
+				break;
+			}
+
+			*Pixel++ = WIN32_BLUE;
+		}
+		Pixel += game_state.clientWidth - game_state.grid_step;
+	}
+}
+uchar8 CheckCell(win32_grid_cell* coords)
+{
+
+	uint32* Pixel = (uint32*)game_state.Bitmapmemory;
+	Pixel += (coords->y * game_state.grid_step) * game_state.clientWidth + (coords->x * game_state.grid_step);
+
+	for (int x = 0; x < game_state.grid_step / 2; x++) {
+		for (int y = 0; y < game_state.grid_step / 2; y++) {
+			if (Pixel > game_state.last_pixel) {
+				break;
+			}
+			if (x == game_state.grid_step / 2 - 1 && y == game_state.grid_step / 2 - 1) {
+				if (*Pixel == WIN32_BLACK) return 0;
+			}
+			Pixel++;
+		}
+		Pixel += game_state.clientWidth - game_state.grid_step;
+	}
+
+	return 1;
+}
+void PrintCellColor(POINT* cursor_pos)
+{
+	printf("Cell [%d][%d] color is - %x\n", cursor_pos->x / game_state.grid_step, cursor_pos->y / game_state.grid_step,
+		grid.color[cursor_pos->x / game_state.grid_step][cursor_pos->y / game_state.grid_step]);
 }

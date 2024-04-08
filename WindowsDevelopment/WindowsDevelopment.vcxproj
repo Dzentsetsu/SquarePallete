@@ -24,7 +24,7 @@
     <ProjectGuid>{8657bd3b-1910-4575-b819-e92ca0dd22e8}</ProjectGuid>
     <RootNamespace>WindowsDevelopment</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
-    <ProjectName>SqarePallete</ProjectName>
+    <ProjectName>Exploration</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -136,10 +136,16 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="main.cpp" />
+    <ClCompile Include="types.h" />
+    <ClCompile Include="win32_layer.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="small.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="debugging.h" />
+    <ClInclude Include="game_specific_declarations.h" />
+    <ClInclude Include="win32_layer.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
