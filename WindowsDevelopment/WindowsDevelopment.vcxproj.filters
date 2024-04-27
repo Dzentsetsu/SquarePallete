@@ -21,6 +21,9 @@
     <ClCompile Include="types.h">
       <Filter>Header Files</Filter>
     </ClCompile>
+    <ClCompile Include="linked_list.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Image Include="small.ico">

@@ -136,6 +136,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="linked_list.cpp" />
     <ClCompile Include="types.h" />
     <ClCompile Include="win32_layer.cpp" />
   </ItemGroup>

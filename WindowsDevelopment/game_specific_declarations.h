@@ -6,6 +6,8 @@
 #define UNSIGNED_CHAR_MAX_VALUE 255
 #define UNSIGNED_CHAR_MIN_VALUE 0
 #define BYTES_PER_PIXEL 4
+#define IS_BLOCK 1
+#define NOT_BLOCK 0
 
 struct global_applicatiton_state
 {
@@ -15,4 +17,5 @@ struct global_applicatiton_state
 	int32 clientWidth;
 	int32 clientHeight;
 	uint32 grid_step;
+	
 };

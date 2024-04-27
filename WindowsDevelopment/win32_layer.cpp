@@ -9,18 +9,26 @@
 #include "win32_layer.h"
 #include "debugging.h"
 #include "game_specific_declarations.h"
+#include "linked_list.cpp"
 
-#ifdef DEBUGG_MODE
-//#undef DEBUGG_MODE
-#endif
+#define _CRTDBG_MAP_ALLOC
+#include <crtdbg.h>
 
-private global_applicatiton_state game_state;
+
+#define DEBUGG_MODE
+
+private global_applicatiton_state game_state = {0};
 private uchar8 initial_run = 0;
-private win32_grid_cell cell = { 0 };
-private win32_grid grid = {};
+private win32_grid grid = {0};
+private path_finding_nodes path = {0};
 
 int wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int32 nCmdShow)
 {
+#ifdef DEBUGG_MODE
+	if (SetProcessDPIAware() == 0)
+		debugg_msg(L"Application is not scaled properly, check DPI awareness")
+#endif  
+
 	RECT client_area_initial_dimensions;
 	AdjustClientArea(&client_area_initial_dimensions);
 
@@ -32,11 +40,8 @@ int wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int32
 	game_state.last_pixel = NULL;
 	game_state.grid_step = 20;
 
-#ifdef DEBUGG_MODE
-	if (SetProcessDPIAware() == 0)
-		debugg_msg(L"Application is not scaled properly, check DPI awareness")
-#endif  
-		const wchar_t* class_name = L"Explore_and_enjoy";
+
+	const wchar_t* class_name = L"Explore_and_enjoy";
 
 	WNDCLASSW wc = { 0 };
 
@@ -62,10 +67,9 @@ int wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int32
 			0,
 			hInstance,
 			0);
-#ifndef DEBUGG_MODE
+#ifdef DEBUGG_MODE
 		CreateConsoleForDebugging();
 #endif
-
 		while (game_state.gameIsRunning)
 		{
 			MSG msg = {};
@@ -77,6 +81,12 @@ int wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int32
 			HDC hdc = GetDC(root_window_handle);
 
 			RunOnlyOnce();
+
+
+			// VISIT:
+			//test();
+			//int debugStop = 22;
+
 
 
 			MakeAGrid(game_state.grid_step, 100, 100, 100);
@@ -129,9 +139,10 @@ LRESULT RootWindowProcedure(HWND window_handle, UINT msg, WPARAM wParam, LPARAM 
 	break;
 	case WM_MOUSEMOVE:
 	{
-		SetCursor(LoadCursor(NULL, IDC_CROSS));
-		
 
+		SetCursor(LoadCursor(NULL, IDC_CROSS));
+
+		
 		POINT cursor_pos;
 		if (GetCursorPos(&cursor_pos))
 		{
@@ -139,12 +150,15 @@ LRESULT RootWindowProcedure(HWND window_handle, UINT msg, WPARAM wParam, LPARAM 
 		}
 
 		if (wParam & MK_LBUTTON) {
+#if 0
+			if (IsItABlockCell(cursor_pos.x / game_state.grid_step, cursor_pos.y / game_state.grid_step) == NOT_BLOCK)
 			FillRectangleOnGrid(window_handle, WIN32_RANDOM_COLOR, game_state.grid_step);
+#endif
 		}
 		if ((GetKeyState(VK_RBUTTON) & 0x80) != 0) {
 			FillRectangleOnGrid(window_handle, WIN32_BLACK, game_state.grid_step);
 		}
-		
+
 	}
 	break;
 	case WM_LBUTTONDOWN:
@@ -155,20 +169,47 @@ LRESULT RootWindowProcedure(HWND window_handle, UINT msg, WPARAM wParam, LPARAM 
 			ScreenToClient(window_handle, &cursor_pos);
 		}
 
-		if (GetKeyState(VK_LCONTROL) >> 15 & 0x1) {
-			PrintCellColor(&cursor_pos);
-		}
-		else {
-		FillRectangleOnGrid(window_handle, WIN32_RANDOM_COLOR, game_state.grid_step);
+		if (path.start.x == 0 && path.start.y == 0) {
+			FillRectangleOnGrid(window_handle, WIN32_KELLY_GREEN, game_state.grid_step);
+			path.start.x = cursor_pos.x / game_state.grid_step;
+			path.start.y = cursor_pos.y / game_state.grid_step;
 		}
 
-		//PrintCellColor(&cursor_pos);
-		//PathFinding(&cursor_pos);
+		if (GetKeyState(VK_CONTROL) >> 15 & 0x1) { PrintCellCosts(&cursor_pos); }
+#if 0
+		if (GetKeyState(VK_LCONTROL) >> 15 & 0x1) {
+			PrintCellColor(&cursor_pos);
+			break;
+		}
+		
+		if (IsItABlockCell(cursor_pos.x / game_state.grid_step, cursor_pos.y / game_state.grid_step) == NOT_BLOCK) {
+			FillRectangleOnGrid(window_handle, WIN32_RANDOM_COLOR, game_state.grid_step);
+		}
+
+		if (GetKeyState(VK_MENU) >> 15 & 0x1)
+			if (IsItABlockCell(cursor_pos.x / game_state.grid_step, cursor_pos.y / game_state.grid_step) != IS_BLOCK) 
+				PathFinding();
+#endif		
 	}
 	break;
 	case WM_RBUTTONDOWN:
 	{
-		FillRectangleOnGrid(window_handle, WIN32_DEFAULT, game_state.grid_step);
+		POINT cursor_pos;
+		if (GetCursorPos(&cursor_pos))
+		{
+			ScreenToClient(window_handle, &cursor_pos);
+		}
+
+		if (GetKeyState(VK_CONTROL) >> 15 & 0x1) {
+			if (path.end.x == 0 && path.end.y == 0) {
+				FillRectangleOnGrid(window_handle, WIN32_BLUE, game_state.grid_step);
+				path.end.x = cursor_pos.x / game_state.grid_step;
+				path.end.y = cursor_pos.y / game_state.grid_step;
+			}
+		}
+		else {
+			FillRectangleOnGrid(window_handle, WIN32_BLACK, game_state.grid_step);
+		}
 	}
 	break;
 	case WM_KEYDOWN:
@@ -178,18 +219,28 @@ LRESULT RootWindowProcedure(HWND window_handle, UINT msg, WPARAM wParam, LPARAM 
 		case 0x43: {
 			ClearScreenBuffer();
 		} break;
+		case 0x45: // Key "E"
+		{
+			_CrtDumpMemoryLeaks();
+			//PathFinding();
+		}break;
 		case 0x47: // Key "G"
 		{
 			MakeAGrid(20, 100, 100, 100);
 		} break;
 		case 0x51: // Key "Q"
 		{
+
 		}break;
 		case 0x52: {
 			RestoreSavedPattern();
 		} break;
 		case 0x53: {
 			SaveBitPatternToFile(window_handle, game_state.Bitmapmemory);
+		} break;
+		case 0x5A: // Key "Z"
+		{
+
 		} break;
 		default:
 			break;
@@ -210,6 +261,7 @@ void RunOnlyOnce()
 	else {
 		FillBitmapMemoryWithFlatColor(WIN32_DEFAULT);
 		MakeAGrid(game_state.grid_step, 100, 100, 100);
+
 		initial_run = 1;
 	}
 }
@@ -284,6 +336,7 @@ void StretchPixels(HWND window_handle)
 
 void MakeAGrid(uint32 step, uchar8 red, uchar8 green, uchar8 blue)
 {
+	uint32 cells = 0;
 	uchar8* Pixel = (uchar8*)game_state.Bitmapmemory;
 	for (int32 x = 0; x < game_state.clientHeight; x++) {
 		for (int32 y = 0; y < game_state.clientWidth; y++) {
@@ -295,9 +348,11 @@ void MakeAGrid(uint32 step, uchar8 red, uchar8 green, uchar8 blue)
 				*Pixel++ = red;
 
 				*Pixel++ = UNSIGNED_CHAR_MAX_VALUE;
+				
 			}
 			else if (initial_run != 1 &&  x % 10 == 0 && y % 10 == 0) {
 				grid.color[y / game_state.grid_step][x / game_state.grid_step] = *Pixel;
+				cells++;
 				Pixel += BYTES_PER_PIXEL;
 			}
 			else {
@@ -305,6 +360,9 @@ void MakeAGrid(uint32 step, uchar8 red, uchar8 green, uchar8 blue)
 			}
 		}
 	}
+#if 0
+	printf("Amount of cells - %d\n", cells);
+#endif
 }
 
 void MakeAPlayerCube(uint32 width, uint32 height, uint32 coordX, uint32 coordY) {
@@ -344,8 +402,8 @@ void FillRectangleOnGrid(HWND window_handle, uint32 rect_color, uint32 step)
 		tile_index_x = cursor_position.x / tile_width;
 		tile_index_y = cursor_position.y / tile_width;
 
-		cell.x = tile_index_x;
-		cell.y = tile_index_y;
+		grid.cell.x = tile_index_x;
+		grid.cell.y = tile_index_y;
 
 		if (game_state.clientWidth - cursor_position.x < step) {
 			tile_width_x = game_state.clientWidth - tile_index_x * tile_width;
@@ -491,102 +549,164 @@ HWND CreateConsoleForDebugging()
 	return console_handle;
 }
 
-void PathFinding(POINT* cursor_pos)
+void PathFinding()
 {
-	printf("Current cell is %d,%d\n", cell.x, cell.y);
-	// Check adjacent cells
-
-	if (cell.x >= 1 && cell.y >= 1 && cell.x < 59 && cell.y < 39) {
-		FillAdjasentRectangles();
-	}
-
+#ifdef DEBUGG_MODE
+	printf("Current cell is %d,%d\n", grid.cell.x, grid.cell.y);
+#endif
+	//TODO:	FIX hardcoded values!!!!
+		printf("Start Path Finding");
+		
+		SearchAdjasentNodes(&path.start);
 }
 
-void FillAdjasentRectangles()
+void SearchAdjasentNodes(win32_cell* middle_cell)
 {
-	win32_grid_cell cell_to_paint = { 0 };
-	cell_to_paint.x = cell.x;
-	cell_to_paint.y = cell.y - 1;
+	win32_cell top_cell, right_cell, bottom_cell, left_cell = {};
 
-	if (CheckCell(&cell_to_paint)) {
-		PaintRectangleWithCellCoords(&cell_to_paint);
+	top_cell.x = middle_cell->x;
+	top_cell.y = middle_cell->y - 1;
+
+	right_cell.x = middle_cell->x + 1;
+	right_cell.y = middle_cell->y;
+
+	bottom_cell.x = middle_cell->x;
+	bottom_cell.y = middle_cell->y + 1;
+
+	left_cell.x = middle_cell->x - 1;
+	left_cell.y = middle_cell->y;
+
+	if (top_cell.y >=0 && top_cell.x>=0 && IsItABlockCell(top_cell.x, top_cell.y) == NOT_BLOCK) {
+		
+		path.node[top_cell.x][top_cell.y].coords.x = top_cell.x;
+		path.node[top_cell.x][top_cell.y].coords.y = top_cell.y;
+
+		path.node[top_cell.x][top_cell.y].g_cost = 10;
+		path.node[top_cell.x][top_cell.y].h_cost = hypot(abs((int32)top_cell.x - (int32)path.end.x), abs((int32)top_cell.y - (int32)path.end.y));
+		path.node[top_cell.x][top_cell.y].total_weight = path.node[top_cell.x][top_cell.y].g_cost + path.node[top_cell.x][top_cell.y].h_cost;
+
 	}
 
-	cell_to_paint.x = cell_to_paint.x + 1;
-	if (CheckCell(&cell_to_paint)) {
-		PaintRectangleWithCellCoords(&cell_to_paint);
+	if (right_cell.y >= 0 && right_cell.x>= 0 && right_cell.x <= 59 && right_cell.y <= 39 && IsItABlockCell(right_cell.x, right_cell.y) == NOT_BLOCK) {
+
+		path.node[right_cell.x][right_cell.y].coords.x = right_cell.x;
+		path.node[right_cell.x][right_cell.y].coords.y = right_cell.y;
+
+		path.node[right_cell.x][right_cell.y].g_cost = 10;
+		path.node[right_cell.x][right_cell.y].h_cost = hypot(abs((int32)right_cell.x - (int32)path.end.x), abs((int32)right_cell.y - (int32)path.end.y));
+		path.node[right_cell.x][right_cell.y].total_weight = path.node[right_cell.x][right_cell.y].g_cost + path.node[right_cell.x][right_cell.y].h_cost;
+
 	}
 
-	cell_to_paint.y = cell_to_paint.y + 1;
-	if (CheckCell(&cell_to_paint)) {
-		PaintRectangleWithCellCoords(&cell_to_paint);
+	if (bottom_cell.y >= 0 && bottom_cell.x >= 0 && bottom_cell.x <= 59 && bottom_cell.y <= 39 && IsItABlockCell(bottom_cell.x, bottom_cell.y) == NOT_BLOCK) {
+
+		path.node[bottom_cell.x][bottom_cell.y].coords.x = bottom_cell.x;
+		path.node[bottom_cell.x][bottom_cell.y].coords.y = bottom_cell.y;
+
+		path.node[bottom_cell.x][bottom_cell.y].g_cost = 10;
+		path.node[bottom_cell.x][bottom_cell.y].h_cost = hypot(abs((int32)bottom_cell.x - (int32)path.end.x), abs((int32)bottom_cell.y - (int32)path.end.y));
+		path.node[bottom_cell.x][bottom_cell.y].total_weight = path.node[bottom_cell.x][bottom_cell.y].g_cost + path.node[bottom_cell.x][bottom_cell.y].h_cost;
 	}
 
-	cell_to_paint.y = cell_to_paint.y + 1;
-	if (CheckCell(&cell_to_paint)) {
-		PaintRectangleWithCellCoords(&cell_to_paint);
+	if (left_cell.y >= 0 && left_cell.x >= 0 && left_cell.x <= 59 && left_cell.y <= 39 && IsItABlockCell(left_cell.x, left_cell.y) == NOT_BLOCK) {
+
+		path.node[left_cell.x][left_cell.y].coords.x = left_cell.x;
+		path.node[left_cell.x][left_cell.y].coords.y = left_cell.y;
+
+		path.node[left_cell.x][left_cell.y].g_cost = 10;
+		path.node[left_cell.x][left_cell.y].h_cost = hypot(abs((int32)left_cell.x - (int32)path.end.x), abs((int32)left_cell.y - (int32)path.end.y));
+		path.node[left_cell.x][left_cell.y].total_weight = path.node[left_cell.x][left_cell.y].g_cost + path.node[left_cell.x][left_cell.y].h_cost;
+
 	}
 
-	cell_to_paint.x = cell_to_paint.x - 1;
-	if (CheckCell(&cell_to_paint)) {
-		PaintRectangleWithCellCoords(&cell_to_paint);
-	}
+	// Know we can check the most promise node if any is present
+	node most_promising_cell, most_p_cell_vertical, most_p_cell_horizontal;
+	
+	path.node[left_cell.x][left_cell.y].total_weight < path.node[right_cell.x][right_cell.y].total_weight ? most_p_cell_horizontal = path.node[left_cell.x][left_cell.y] :
+		most_p_cell_horizontal = path.node[right_cell.x][right_cell.y];
 
-	cell_to_paint.x = cell_to_paint.x - 1;
-	if (CheckCell(&cell_to_paint)) {
-		PaintRectangleWithCellCoords(&cell_to_paint);
-	}
+	path.node[top_cell.x][top_cell.y].total_weight < path.node[bottom_cell.x][bottom_cell.y].total_weight ? most_p_cell_vertical = path.node[top_cell.x][top_cell.y] :
+		most_p_cell_vertical = path.node[bottom_cell.x][bottom_cell.y];
 
-	cell_to_paint.y = cell_to_paint.y - 1;
-	if (CheckCell(&cell_to_paint)) {
-		PaintRectangleWithCellCoords(&cell_to_paint);
-	}
+	most_p_cell_horizontal.total_weight < most_p_cell_vertical.total_weight ? most_promising_cell = most_p_cell_horizontal : most_promising_cell = most_p_cell_vertical;
 
-	cell_to_paint.y = cell_to_paint.y - 1;
-	if (CheckCell(&cell_to_paint)) {
-		PaintRectangleWithCellCoords(&cell_to_paint);
-	}
+	PaintRectangleByCellCoordsPathFinding(most_promising_cell.coords.x, most_promising_cell.coords.y);
+
+	if(most_promising_cell.coords.x != path.end.x && most_promising_cell.coords.y != path.end.y)
+		SearchAdjasentNodes(&most_promising_cell.coords);
 }
-
-void PaintRectangleWithCellCoords(win32_grid_cell* coords)
+#if 0
+void PaintRectangleWithCellCoords(uint32 x, uint32 y)
 {
 	uint32* Pixel = (uint32*)game_state.Bitmapmemory;
-	Pixel += (coords->y * game_state.grid_step) * game_state.clientWidth + (coords->x * game_state.grid_step);
+	Pixel += (y * game_state.grid_step) * game_state.clientWidth + (x * game_state.grid_step);
 
 	for (int x = 0; x < game_state.grid_step; x++) {
 		for (int y = 0; y < game_state.grid_step; y++) {
 			if (Pixel > game_state.last_pixel) {
 				break;
 			}
-
-			*Pixel++ = WIN32_BLUE;
+			*Pixel++ = WIN32_YELLOW;
 		}
 		Pixel += game_state.clientWidth - game_state.grid_step;
 	}
 }
-uchar8 CheckCell(win32_grid_cell* coords)
+#endif
+
+void PaintRectangleByCellCoordsPathFinding(uint32 x, uint32 y)
 {
-
 	uint32* Pixel = (uint32*)game_state.Bitmapmemory;
-	Pixel += (coords->y * game_state.grid_step) * game_state.clientWidth + (coords->x * game_state.grid_step);
+	Pixel += (y * game_state.grid_step) * game_state.clientWidth + (x * game_state.grid_step);
 
-	for (int x = 0; x < game_state.grid_step / 2; x++) {
-		for (int y = 0; y < game_state.grid_step / 2; y++) {
+	for (int x = 0; x < game_state.grid_step; x++) {
+		for (int y = 0; y < game_state.grid_step; y++) {
 			if (Pixel > game_state.last_pixel) {
 				break;
 			}
-			if (x == game_state.grid_step / 2 - 1 && y == game_state.grid_step / 2 - 1) {
-				if (*Pixel == WIN32_BLACK) return 0;
-			}
-			Pixel++;
+			*Pixel++ = WIN32_GREEN;
 		}
 		Pixel += game_state.clientWidth - game_state.grid_step;
 	}
+}
 
-	return 1;
+uchar8 IsItABlockCell(uint32 x, uint32 y)
+{
+	if (grid.color[x][y] == WIN32_BLACK) return IS_BLOCK;
+	else return NOT_BLOCK;
 }
 void PrintCellColor(POINT* cursor_pos)
 {
 	printf("Cell [%d][%d] color is - %x\n", cursor_pos->x / game_state.grid_step, cursor_pos->y / game_state.grid_step,
 		grid.color[cursor_pos->x / game_state.grid_step][cursor_pos->y / game_state.grid_step]);
+}
+
+void FillRectangleByCellCoords(uint32 gridX, uint32 gridY, uint32 color) 
+{
+		uint32* Pixel = (uint32*)game_state.Bitmapmemory;
+		Pixel += (gridY * game_state.grid_step) * game_state.clientWidth + (gridX * game_state.grid_step);
+
+		for (int x = 0; x < game_state.grid_step; x++) {
+			for (int y = 0; y < game_state.grid_step; y++) {
+				if (Pixel > game_state.last_pixel) {
+					debugg_msg(L"Tried to reference Pixel that is out of memory")
+					break;
+				}
+				*Pixel++ = color;
+			}
+			Pixel += game_state.clientWidth - game_state.grid_step;
+		}
+}
+
+
+void PrintCellCosts(POINT* cp)
+{
+	node* node = &(path.node[cp->x / game_state.grid_step][cp->y / game_state.grid_step]);
+	printf("\n*******************\nG cost - %f\nH cost - %f\nTotal - %f\n*******************\n", node->g_cost, node->h_cost, node->total_weight);
+}
+
+
+void test() {
+	//linked_list my_list;
+	//my_list.next = NULL;
+	//printf("NEXT - %p", my_list.next);
 }
